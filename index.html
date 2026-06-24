@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Neon Runner — 3D Endless Runner</title>
+<style>
+  :root {
+    --neon-cyan: #22e3ff;
+    --neon-pink: #ff2bd6;
+    --neon-violet: #9b5cff;
+    --bg-deep: #05060f;
+    --text: #eaf6ff;
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #game-root { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    padding: clamp(16px, 3vw, 32px);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    font-variant-numeric: tabular-nums;
+    z-index: 10;
+  }
+
+  .hud-panel {
+    background: linear-gradient(135deg, rgba(34, 227, 255, 0.08), rgba(155, 92, 255, 0.05));
+    border: 1px solid rgba(34, 227, 255, 0.25);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+    padding: 12px 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 0 20px rgba(34, 227, 255, 0.04);
+  }
+
+  .hud-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.65;
+    margin-bottom: 2px;
+  }
+
+  .hud-value {
+    font-size: clamp(1.4rem, 4vw, 2.1rem);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  #score-panel .hud-value { color: var(--neon-cyan); text-shadow: 0 0 16px rgba(34, 227, 255, 0.6); }
+  #coin-panel { text-align: right; }
+  #coin-panel .hud-value { color: #ffd34d; text-shadow: 0 0 16px rgba(255, 211, 77, 0.6); }
+  .coin-row { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .coin-icon {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff3b0, #ffb800 60%, #b87800);
+    box-shadow: 0 0 12px rgba(255, 184, 0, 0.7);
+  }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 50% 35%, rgba(155, 92, 255, 0.18), transparent 60%),
+      rgba(5, 6, 15, 0.82);
+    backdrop-filter: blur(6px);
+    transition: opacity 0.5s var(--ease-out-expo);
+  }
+
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .title {
+    font-size: clamp(2.6rem, 10vw, 6rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 0.92;
+    background: linear-gradient(120deg, var(--neon-cyan), var(--neon-pink) 55%, var(--neon-violet));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 28px rgba(255, 43, 214, 0.35));
+    margin-bottom: 10px;
+  }
+
+  .subtitle {
+    font-size: clamp(0.85rem, 2.5vw, 1.05rem);
+    opacity: 0.7;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 36px;
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 180px));
+    gap: 12px;
+    margin-bottom: 40px;
+    max-width: 420px;
+  }
+
+  .control-card {
+    background: rgba(34, 227, 255, 0.06);
+    border: 1px solid rgba(34, 227, 255, 0.18);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: left;
+  }
+  .control-card .keys { font-size: 1rem; font-weight: 700; color: var(--neon-cyan); margin-bottom: 2px; }
+  .control-card .act { font-size: 0.75rem; opacity: 0.6; letter-spacing: 0.08em; }
+
+  .btn {
+    pointer-events: auto;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: clamp(1rem, 3vw, 1.25rem);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #04121a;
+    padding: 16px 48px;
+    border-radius: 999px;
+    background: linear-gradient(120deg, var(--neon-cyan), #5be0ff);
+    box-shadow: 0 10px 40px rgba(34, 227, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: transform 0.25s var(--ease-out-expo), box-shadow 0.25s var(--ease-out-expo);
+  }
+  .btn:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 16px 52px rgba(34, 227, 255, 0.6); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+
+  .final-stats {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 38px;
+  }
+  .final-stat .num { font-size: clamp(2rem, 7vw, 3.4rem); font-weight: 800; line-height: 1; }
+  .final-stat .lab { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.6; margin-top: 6px; }
+  #final-score .num { color: var(--neon-cyan); }
+  #final-coins .num { color: #ffd34d; }
+
+  .gameover-title {
+    font-size: clamp(2.4rem, 9vw, 5rem);
+    font-weight: 800;
+    color: var(--neon-pink);
+    filter: drop-shadow(0 0 24px rgba(255, 43, 214, 0.5));
+    margin-bottom: 8px;
+  }
+
+  .hint {
+    margin-top: 22px;
+    font-size: 0.78rem;
+    opacity: 0.45;
+    letter-spacing: 0.1em;
+  }
+
+  /* ---------- Floating +10 popups ---------- */
+  #popup-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 15;
+  }
+  .coin-popup {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-weight: 800;
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    font-variant-numeric: tabular-nums;
+    color: #ffd34d;
+    text-shadow: 0 0 12px rgba(255, 184, 0, 0.85), 0 2px 4px rgba(0, 0, 0, 0.6);
+    will-change: transform, opacity;
+    animation: coinFloat 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes coinFloat {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    18%  { opacity: 1; transform: translate(-50%, -75%) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+  }
+
+  /* mobile swipe note */
+  @media (max-width: 600px) {
+    .controls-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <div id="game-root"></div>
+  <div id="popup-layer"></div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" class="hidden">
+    <div id="score-panel" class="hud-panel">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score-value">0</div>
+    </div>
+    <div id="coin-panel" class="hud-panel">
+      <div class="hud-label">Coins</div>
+      <div class="coin-row">
+        <span class="coin-icon"></span>
+        <span class="hud-value" id="coin-value">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Start screen ===== -->
+  <div id="start-screen" class="overlay">
+    <h1 class="title">NEON<br>RUNNER</h1>
+    <p class="subtitle">Dodge · Collect · Survive</p>
+    <div class="controls-grid">
+      <div class="control-card"><div class="keys">← → / A D</div><div class="act">Switch Lanes</div></div>
+      <div class="control-card"><div class="keys">↑ / W / Space</div><div class="act">Jump</div></div>
+      <div class="control-card"><div class="keys">↓ / S</div><div class="act">Slide</div></div>
+      <div class="control-card"><div class="keys">Swipe</div><div class="act">On Mobile</div></div>
+    </div>
+    <button class="btn" id="start-btn">Start Run</button>
+    <p class="hint">Speed increases the longer you survive</p>
+  </div>
+
+  <!-- ===== Game over screen ===== -->
+  <div id="gameover-screen" class="overlay hidden">
+    <h2 class="gameover-title">GAME OVER</h2>
+    <p class="subtitle" id="distance-line">You ran into something.</p>
+    <div class="final-stats">
+      <div class="final-stat" id="final-score"><div class="num" id="final-score-num">0</div><div class="lab">Score</div></div>
+      <div class="final-stat" id="final-coins"><div class="num" id="final-coins-num">0</div><div class="lab">Coins</div></div>
+    </div>
+    <button class="btn" id="restart-btn">Play Again</button>
+    <p class="hint">Best: <span id="best-score">0</span></p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    // ============================================================
+    //  CONFIG — all tunable gameplay constants live here
+    // ============================================================
+    const CONFIG = {
+      LANE_WIDTH: 2.6,            // horizontal distance between lanes
+      LANES: [-1, 0, 1],          // logical lane indices -> x = index * LANE_WIDTH
+      TRACK_LENGTH: 220,          // how far ahead the world is built (z depth)
+      SEGMENT_LENGTH: 20,         // length of one ground tile
+      START_SPEED: 0.42,          // world units moved toward player per frame
+      MAX_SPEED: 1.35,
+      SPEED_RAMP: 0.000045,       // speed gained per ms survived
+      LANE_SWITCH_SPEED: 0.22,    // lerp factor for smooth lane changes
+      GRAVITY: -0.045,
+      JUMP_VELOCITY: 0.78,
+      SLIDE_DURATION: 620,        // ms
+      PLAYER_Z: 6,                // player's fixed z position (camera-relative)
+      SPAWN_AHEAD: -200,          // z where new objects appear
+      DESPAWN_BEHIND: 12,         // z past which objects are recycled
+      OBSTACLE_GAP_MIN: 18,       // min z gap between obstacle rows
+      OBSTACLE_GAP_MAX: 34,
+      COIN_RUN_LENGTH: 5,         // coins spawned in a line
+      PARTICLE_POOL: 120,         // total reusable spark meshes
+      PARTICLES_PER_BURST: 14,    // sparks emitted per coin pickup
+      PARTICLE_LIFE: 520,         // ms a spark stays alive
+    };
+
+    // ============================================================
+    //  STATE
+    // ============================================================
+    const State = { MENU: "menu", PLAYING: "playing", OVER: "over" };
+    let gameState = State.MENU;
+
+    let scene, camera, renderer, clock;
+    let player, playerGroup;
+    const obstacles = [];
+    const coins = [];
+    const particles = [];       // pool of spark meshes; .userData carries live state
+    let groundSegments = [];
+
+    let currentLane = 1;        // index into CONFIG.LANES (start center)
+    let targetX = 0;
+    let verticalVelocity = 0;
+    let isJumping = false;
+    let isSliding = false;
+    let slideTimer = 0;
+
+    let speed = CONFIG.START_SPEED;
+    let score = 0;
+    let coinCount = 0;
+    let elapsed = 0;
+    let bestScore = Number(localStorage.getItem("neonRunnerBest") || 0);
+
+    // DOM refs
+    const dom = {
+      root: document.getElementById("game-root"),
+      popupLayer: document.getElementById("popup-layer"),
+      hud: document.getElementById("hud"),
+      score: document.getElementById("score-value"),
+      coins: document.getElementById("coin-value"),
+      startScreen: document.getElementById("start-screen"),
+      gameoverScreen: document.getElementById("gameover-screen"),
+      startBtn: document.getElementById("start-btn"),
+      restartBtn: document.getElementById("restart-btn"),
+      finalScore: document.getElementById("final-score-num"),
+      finalCoins: document.getElementById("final-coins-num"),
+      bestScore: document.getElementById("best-score"),
+      distanceLine: document.getElementById("distance-line"),
+    };
+    dom.bestScore.textContent = bestScore;
+
+    // ============================================================
+    //  SCENE SETUP
+    // ============================================================
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x05060f);
+      scene.fog = new THREE.Fog(0x05060f, 40, 160); // fades distant track into the dark
+
+      camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        400
+      );
+      camera.position.set(0, 6.2, 13);
+      camera.lookAt(0, 1.4, -10);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      dom.root.appendChild(renderer.domElement);
+
+      clock = new THREE.Clock();
+
+      buildLights();
+      buildTrack();
+      buildSideDecor();
+      buildPlayer();
+      buildParticlePool();
+    }
+
+    // ---- Particle pool: pre-built sparks reused for every coin burst ----
+    function buildParticlePool() {
+      const geo = new THREE.OctahedronGeometry(0.12, 0);
+      for (let i = 0; i < CONFIG.PARTICLE_POOL; i++) {
+        // Each spark owns its material so we can fade opacity independently
+        const mat = new THREE.MeshBasicMaterial({
+          color: 0xffd34d,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending, // overlapping sparks glow brighter
+          depthWrite: false,
+        });
+        const p = new THREE.Mesh(geo, mat);
+        p.visible = false;
+        p.userData = { active: false, life: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
+        scene.add(p);
+        particles.push(p);
+      }
+    }
+
+    function buildLights() {
+      // Soft ambient fill so nothing is pure black
+      scene.add(new THREE.AmbientLight(0x3344aa, 0.6));
+
+      // Key light from above-front, casts the player's shadow on the track
+      const key = new THREE.DirectionalLight(0xffffff, 0.9);
+      key.position.set(6, 18, 8);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.camera.near = 1;
+      key.shadow.camera.far = 60;
+      key.shadow.camera.left = -15;
+      key.shadow.camera.right = 15;
+      key.shadow.camera.top = 15;
+      key.shadow.camera.bottom = -15;
+      scene.add(key);
+
+      // Neon rim lights for that synthwave mood
+      const cyan = new THREE.PointLight(0x22e3ff, 1.1, 60);
+      cyan.position.set(-10, 6, -20);
+      scene.add(cyan);
+
+      const pink = new THREE.PointLight(0xff2bd6, 1.1, 60);
+      pink.position.set(10, 6, -40);
+      scene.add(pink);
+    }
+
+    // ---- Track: a pool of ground tiles that recycle forward ----
+    function buildTrack() {
+      const tileGeo = new THREE.BoxGeometry(CONFIG.LANE_WIDTH * 3 + 1.2, 0.5, CONFIG.SEGMENT_LENGTH);
+      const count = Math.ceil(CONFIG.TRACK_LENGTH / CONFIG.SEGMENT_LENGTH) + 2;
+
+      for (let i = 0; i < count; i++) {
+        const mat = new THREE.MeshStandardMaterial({
+          color: i % 2 === 0 ? 0x141826 : 0x10131f,
+          roughness: 0.85,
+          metalness: 0.1,
+        });
+        const tile = new THREE.Mesh(tileGeo, mat);
+        tile.position.set(0, -0.25, CONFIG.PLAYER_Z - i * CONFIG.SEGMENT_LENGTH);
+        tile.receiveShadow = true;
+        scene.add(tile);
+        groundSegments.push(tile);
+
+        // Lane divider glow lines on each tile
+        addLaneLines(tile.position.z);
+      }
+    }
+
+    const laneLines = [];
+    function addLaneLines(z) {
+      const lineGeo = new THREE.BoxGeometry(0.08, 0.02, CONFIG.SEGMENT_LENGTH * 0.7);
+      const lineMat = new THREE.MeshBasicMaterial({ color: 0x22e3ff });
+      [-0.5, 0.5].forEach((offset) => {
+        const line = new THREE.Mesh(lineGeo, lineMat);
+        line.position.set(offset * CONFIG.LANE_WIDTH, 0.02, z);
+        scene.add(line);
+        laneLines.push(line);
+      });
+    }
+
+    // ---- Decorative neon buildings flanking the track ----
+    const decor = [];
+    function buildSideDecor() {
+      const geo = new THREE.BoxGeometry(3, 1, 3);
+      for (let i = 0; i < 28; i++) {
+        const h = 6 + Math.random() * 30;
+        const side = i % 2 === 0 ? -1 : 1;
+        const neon = Math.random() > 0.5 ? 0x22e3ff : 0xff2bd6;
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x0a0c18,
+          emissive: neon,
+          emissiveIntensity: 0.25,
+          roughness: 0.4,
+          metalness: 0.6,
+        });
+        const b = new THREE.Mesh(geo, mat);
+        b.scale.set(1, h, 1);
+        b.position.set(side * (8 + Math.random() * 7), h / 2 - 0.25, -i * 16 + 10);
+        scene.add(b);
+        decor.push(b);
+      }
+    }
+
+    // ---- Player: a stylized capsule-ish runner ----
+    function buildPlayer() {
+      playerGroup = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x22e3ff,
+        emissive: 0x22e3ff,
+        emissiveIntensity: 0.35,
+        roughness: 0.3,
+        metalness: 0.4,
+      });
+      // Cylinder body (CapsuleGeometry needs three.js r142+; we're on r128)
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.5, 16), bodyMat);
+      body.position.y = 0.9;
+      body.castShadow = true;
+      playerGroup.add(body);
+
+      const headMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0xff2bd6, emissiveIntensity: 0.3, roughness: 0.2,
+      });
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 16), headMat);
+      head.position.y = 1.85;
+      head.castShadow = true;
+      playerGroup.add(head);
+
+      playerGroup.position.set(0, 0, CONFIG.PLAYER_Z);
+      player = playerGroup; // alias used by physics
+      scene.add(playerGroup);
+    }
+
+    // ============================================================
+    //  SPAWNING (object pooling-style: create on demand, recycle)
+    // ============================================================
+    function makeObstacle(z) {
+      const lane = CONFIG.LANES[Math.floor(Math.random() * 3)];
+      const type = Math.random();
+      let mesh, kind;
+
+      if (type < 0.5) {
+        // Low barrier — must JUMP over it
+        kind = "jump";
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(CONFIG.LANE_WIDTH * 0.8, 1.0, 0.8),
+          new THREE.MeshStandardMaterial({ color: 0xff2bd6, emissive: 0xff2bd6, emissiveIntensity: 0.5, roughness: 0.3 })
+        );
+        mesh.position.set(lane * CONFIG.LANE_WIDTH, 0.5, z);
+      } else {
+        // Overhead arch — must SLIDE under it
+        kind = "slide";
+        mesh = new THREE.Group();
+        const barMat = new THREE.MeshStandardMaterial({ color: 0x9b5cff, emissive: 0x9b5cff, emissiveIntensity: 0.5, roughness: 0.3 });
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.LANE_WIDTH * 0.95, 0.6, 0.8), barMat);
+        bar.position.y = 2.1;
+        mesh.add(bar);
+        [-1, 1].forEach((s) => {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.4), barMat);
+          post.position.set(s * CONFIG.LANE_WIDTH * 0.45, 1.2, 0);
+          mesh.add(post);
+        });
+        mesh.position.set(lane * CONFIG.LANE_WIDTH, 0, z);
+      }
+
+      mesh.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      mesh.userData = { kind, lane, type: "obstacle" };
+      scene.add(mesh);
+      obstacles.push(mesh);
+      return mesh;
+    }
+
+    function makeCoinRun(z) {
+      const lane = CONFIG.LANES[Math.floor(Math.random() * 3)];
+      const coinGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 20);
+      const coinMat = new THREE.MeshStandardMaterial({
+        color: 0xffd34d, emissive: 0xffb800, emissiveIntensity: 0.6,
+        roughness: 0.2, metalness: 0.8,
+      });
+      for (let i = 0; i < CONFIG.COIN_RUN_LENGTH; i++) {
+        const coin = new THREE.Mesh(coinGeo, coinMat);
+        coin.rotation.x = Math.PI / 2; // face the player, spin around Y
+        coin.position.set(lane * CONFIG.LANE_WIDTH, 1.1, z - i * 2.4);
+        coin.userData = { type: "coin", collected: false };
+        coin.castShadow = true;
+        scene.add(coin);
+        coins.push(coin);
+      }
+    }
+
+    // ============================================================
+    //  INPUT
+    // ============================================================
+    function changeLane(dir) {
+      const next = currentLane + dir;
+      if (next < 0 || next > 2) return;
+      currentLane = next;
+      targetX = CONFIG.LANES[currentLane] * CONFIG.LANE_WIDTH;
+    }
+
+    function jump() {
+      if (isJumping || isSliding) return;
+      isJumping = true;
+      verticalVelocity = CONFIG.JUMP_VELOCITY;
+    }
+
+    function slide() {
+      if (isSliding || isJumping) return;
+      isSliding = true;
+      slideTimer = CONFIG.SLIDE_DURATION;
+    }
+
+    function onKey(e) {
+      if (gameState !== State.PLAYING) {
+        if ((e.code === "Space" || e.code === "Enter") && gameState !== State.PLAYING) {
+          gameState === State.MENU ? startGame() : restartGame();
+        }
+        return;
+      }
+      switch (e.code) {
+        case "ArrowLeft": case "KeyA": changeLane(-1); break;
+        case "ArrowRight": case "KeyD": changeLane(1); break;
+        case "ArrowUp": case "KeyW": case "Space": jump(); break;
+        case "ArrowDown": case "KeyS": slide(); break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+
+    // Touch / swipe controls
+    let touchStart = null;
+    window.addEventListener("touchstart", (e) => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    window.addEventListener("touchend", (e) => {
+      if (!touchStart || gameState !== State.PLAYING) { touchStart = null; return; }
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      const absX = Math.abs(dx), absY = Math.abs(dy);
+      if (Math.max(absX, absY) < 30) { touchStart = null; return; } // tap, ignore
+      if (absX > absY) { dx > 0 ? changeLane(1) : changeLane(-1); }
+      else { dy > 0 ? slide() : jump(); }
+      touchStart = null;
+    }, { passive: true });
+
+    // ============================================================
+    //  GAME FLOW
+    // ============================================================
+    function resetWorld() {
+      // Clear pooled objects
+      [...obstacles, ...coins].forEach((o) => scene.remove(o));
+      obstacles.length = 0;
+      coins.length = 0;
+
+      // Deactivate any lingering sparks from the previous run
+      for (const p of particles) {
+        p.userData.active = false;
+        p.visible = false;
+        p.material.opacity = 0;
+      }
+
+      currentLane = 1;
+      targetX = 0;
+      playerGroup.position.set(0, 0, CONFIG.PLAYER_Z);
+      verticalVelocity = 0;
+      isJumping = false;
+      isSliding = false;
+      slideTimer = 0;
+
+      speed = CONFIG.START_SPEED;
+      score = 0;
+      coinCount = 0;
+      elapsed = 0;
+      spawnAccumulator = 0;
+
+      dom.score.textContent = "0";
+      dom.coins.textContent = "0";
+    }
+
+    function startGame() {
+      resetWorld();
+      gameState = State.PLAYING;
+      dom.startScreen.classList.add("hidden");
+      dom.gameoverScreen.classList.add("hidden");
+      dom.hud.classList.remove("hidden");
+    }
+
+    function restartGame() { startGame(); }
+
+    function gameOver() {
+      gameState = State.OVER;
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("neonRunnerBest", String(bestScore));
+      }
+      dom.finalScore.textContent = score;
+      dom.finalCoins.textContent = coinCount;
+      dom.bestScore.textContent = bestScore;
+      dom.distanceLine.textContent =
+        coinCount > 0 ? `You banked ${coinCount} coin${coinCount === 1 ? "" : "s"}.` : "No coins this run.";
+      dom.hud.classList.add("hidden");
+      dom.gameoverScreen.classList.remove("hidden");
+    }
+
+    dom.startBtn.addEventListener("click", startGame);
+    dom.restartBtn.addEventListener("click", restartGame);
+
+    // ============================================================
+    //  COLLISION — simple AABB-ish lane + z + height checks
+    // ============================================================
+    function lanesMatch(objX) {
+      return Math.abs(objX - playerGroup.position.x) < CONFIG.LANE_WIDTH * 0.5;
+    }
+
+    function checkCollisions() {
+      const pz = playerGroup.position.z;
+      const py = playerGroup.position.y; // base height (0 ground, >0 jumping)
+
+      // Obstacles
+      for (const ob of obstacles) {
+        if (Math.abs(ob.position.z - pz) > 1.2) continue;
+        if (!lanesMatch(ob.position.x)) continue;
+
+        if (ob.userData.kind === "jump") {
+          // Cleared only if high enough off the ground
+          if (py < 1.1) return gameOver();
+        } else { // slide arch
+          // Cleared only if sliding (low profile)
+          if (!isSliding) return gameOver();
+        }
+      }
+
+      // Coins
+      for (const coin of coins) {
+        if (coin.userData.collected) continue;
+        if (Math.abs(coin.position.z - pz) > 1.0) continue;
+        if (!lanesMatch(coin.position.x)) continue;
+        // Vertical proximity (coins float at ~1.1)
+        if (Math.abs(coin.position.y - (py + 0.9)) > 1.4) continue;
+        collectCoin(coin);
+      }
+    }
+
+    function collectCoin(coin) {
+      coin.userData.collected = true;
+      coin.visible = false;
+      coinCount++;
+      score += 10; // coins give bonus score
+      dom.coins.textContent = coinCount;
+      spawnBurst(coin.position);
+      showScorePopup(coin.position, "+10");
+    }
+
+    // Project a 3D world point to 2D screen space and float a label up from it
+    const _projV = new THREE.Vector3();
+    function showScorePopup(worldPos, text) {
+      _projV.copy(worldPos).project(camera);
+      if (_projV.z > 1) return; // behind the camera, skip
+      const x = (_projV.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-_projV.y * 0.5 + 0.5) * window.innerHeight;
+
+      const el = document.createElement("div");
+      el.className = "coin-popup";
+      el.textContent = text;
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      dom.popupLayer.appendChild(el);
+      // Self-remove once the CSS animation finishes
+      el.addEventListener("animationend", () => el.remove());
+    }
+
+    // Fire a radial spray of sparks from a world position by waking pooled meshes
+    function spawnBurst(origin) {
+      let emitted = 0;
+      for (const p of particles) {
+        if (p.userData.active) continue;
+        // Random direction on a sphere, biased slightly upward for a "pop"
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const sp = 0.18 + Math.random() * 0.22;
+        p.userData.active = true;
+        p.userData.life = CONFIG.PARTICLE_LIFE;
+        p.userData.vx = Math.sin(phi) * Math.cos(theta) * sp;
+        p.userData.vy = Math.abs(Math.cos(phi)) * sp + 0.12;
+        p.userData.vz = Math.sin(phi) * Math.sin(theta) * sp;
+        p.userData.spin = (Math.random() - 0.5) * 0.4;
+        p.position.copy(origin);
+        p.scale.setScalar(0.6 + Math.random() * 0.8);
+        p.material.opacity = 1;
+        p.visible = true;
+        if (++emitted >= CONFIG.PARTICLES_PER_BURST) break;
+      }
+    }
+
+    function updateParticles(dt) {
+      const step = dt / 16.67; // normalize motion to ~60fps frames
+      for (const p of particles) {
+        if (!p.userData.active) continue;
+        const u = p.userData;
+        p.position.x += u.vx * step;
+        p.position.y += u.vy * step;
+        p.position.z += (u.vz + speed) * step; // ride the world flow toward player
+        u.vy += CONFIG.GRAVITY * 0.5 * step;   // light gravity
+        p.rotation.x += u.spin;
+        p.rotation.y += u.spin;
+        u.life -= dt;
+        const t = Math.max(0, u.life / CONFIG.PARTICLE_LIFE);
+        p.material.opacity = t;          // fade out
+        p.scale.multiplyScalar(0.98);    // shrink slightly
+        if (u.life <= 0) {
+          u.active = false;
+          p.visible = false;
+        }
+      }
+    }
+
+    // ============================================================
+    //  UPDATE LOOP
+    // ============================================================
+    function updatePlayer(dt) {
+      // Smooth horizontal lane interpolation
+      playerGroup.position.x += (targetX - playerGroup.position.x) * CONFIG.LANE_SWITCH_SPEED;
+
+      // Jump physics
+      if (isJumping) {
+        playerGroup.position.y += verticalVelocity;
+        verticalVelocity += CONFIG.GRAVITY;
+        if (playerGroup.position.y <= 0) {
+          playerGroup.position.y = 0;
+          isJumping = false;
+          verticalVelocity = 0;
+        }
+      }
+
+      // Slide handling — squash the player visually
+      if (isSliding) {
+        slideTimer -= dt;
+        playerGroup.scale.y = 0.5;
+        playerGroup.scale.x = 1.25;
+        if (slideTimer <= 0) {
+          isSliding = false;
+          playerGroup.scale.set(1, 1, 1);
+        }
+      }
+
+      // Subtle run bob + lean into turns for life
+      const bob = isJumping || isSliding ? 0 : Math.sin(elapsed * 0.02) * 0.06;
+      playerGroup.children[0].position.y = 0.9 + bob;
+      playerGroup.rotation.z = (targetX - playerGroup.position.x) * 0.12;
+    }
+
+    function recycle(obj, list) {
+      scene.remove(obj);
+      const idx = list.indexOf(obj);
+      if (idx > -1) list.splice(idx, 1);
+    }
+
+    function updateWorld() {
+      // Move everything toward the player along +Z
+      const move = speed;
+
+      // Ground tiles: when one passes the player, send it to the back
+      for (const tile of groundSegments) {
+        tile.position.z += move;
+        if (tile.position.z > CONFIG.PLAYER_Z + CONFIG.SEGMENT_LENGTH) {
+          tile.position.z -= groundSegments.length * CONFIG.SEGMENT_LENGTH;
+        }
+      }
+      for (const line of laneLines) {
+        line.position.z += move;
+        if (line.position.z > CONFIG.PLAYER_Z + CONFIG.SEGMENT_LENGTH) {
+          line.position.z -= (laneLines.length / 2) * CONFIG.SEGMENT_LENGTH;
+        }
+      }
+
+      // Side decor recycles too
+      for (const b of decor) {
+        b.position.z += move;
+        if (b.position.z > 20) b.position.z -= 28 * 16;
+      }
+
+      // Obstacles
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const ob = obstacles[i];
+        ob.position.z += move;
+        if (ob.position.z > CONFIG.DESPAWN_BEHIND) recycle(ob, obstacles);
+      }
+
+      // Coins (spin + drift)
+      for (let i = coins.length - 1; i >= 0; i--) {
+        const c = coins[i];
+        c.position.z += move;
+        c.rotation.y += 0.12;
+        if (c.position.z > CONFIG.DESPAWN_BEHIND) recycle(c, coins);
+      }
+
+      // Spawn new content ahead, paced by distance traveled
+      maybeSpawn(move);
+    }
+
+    let spawnAccumulator = 0;
+    function maybeSpawn(move) {
+      spawnAccumulator += move;
+      const gap = CONFIG.OBSTACLE_GAP_MIN + Math.random() * (CONFIG.OBSTACLE_GAP_MAX - CONFIG.OBSTACLE_GAP_MIN);
+      if (spawnAccumulator >= gap) {
+        spawnAccumulator = 0;
+        makeObstacle(CONFIG.SPAWN_AHEAD);
+        // Often pair a coin run in a (possibly different) lane just ahead
+        if (Math.random() > 0.3) {
+          makeCoinRun(CONFIG.SPAWN_AHEAD - 8 - Math.random() * 6);
+        }
+      }
+    }
+
+    function update(dt) {
+      if (gameState !== State.PLAYING) return;
+
+      elapsed += dt;
+
+      // Difficulty ramp
+      speed = Math.min(CONFIG.MAX_SPEED, CONFIG.START_SPEED + elapsed * CONFIG.SPEED_RAMP);
+
+      updatePlayer(dt);
+      updateWorld();
+      checkCollisions();
+      updateParticles(dt);
+
+      // Score scales with distance (speed) so faster = more points
+      score += Math.round(speed * 2);
+      dom.score.textContent = score;
+    }
+
+    // ============================================================
+    //  RENDER LOOP
+    // ============================================================
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta() * 1000, 50); // ms, clamped to avoid huge jumps
+
+      // Camera gently follows the player's x for a dynamic feel
+      if (gameState === State.PLAYING) {
+        camera.position.x += (playerGroup.position.x * 0.35 - camera.position.x) * 0.08;
+      }
+
+      update(dt);
+      renderer.render(scene, camera);
+    }
+
+    // ============================================================
+    //  RESIZE
+    // ============================================================
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ============================================================
+    //  BOOT
+    // ============================================================
+    initScene();
+    animate();
+  })();
+  </script>
+</body>
+</html>

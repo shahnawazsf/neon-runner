@@ -1,0 +1,10 @@
+# Editor / tooling scaffolding (not part of the game)
+.claude/
+.agent-skill/
+.agent-skills
+agent-skills/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
