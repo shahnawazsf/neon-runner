@@ -30,12 +30,31 @@
   #game-root { position: fixed; inset: 0; }
   canvas { display: block; }
 
+  /* ---------- Top-left branding ---------- */
+  #brand {
+    position: absolute;
+    top: clamp(14px, 2.5vw, 26px);
+    left: clamp(16px, 3vw, 32px);
+    z-index: 30;
+    pointer-events: none;
+    font-weight: 800;
+    font-size: clamp(0.95rem, 2.6vw, 1.4rem);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    background: linear-gradient(120deg, var(--neon-cyan), var(--neon-pink) 60%, var(--neon-violet));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 14px rgba(255, 43, 214, 0.4));
+  }
+
   /* ---------- HUD ---------- */
   #hud {
     position: absolute;
     inset: 0;
     pointer-events: none;
     padding: clamp(16px, 3vw, 32px);
+    padding-top: clamp(58px, 9vw, 84px); /* clear the top-left brand */
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -213,6 +232,9 @@
 <body>
   <div id="game-root"></div>
   <div id="popup-layer"></div>
+
+  <!-- ===== Top-left branding ===== -->
+  <div id="brand">🏃 Abdullah &amp; Azka — Let's Run</div>
 
   <!-- ===== HUD ===== -->
   <div id="hud" class="hidden">
